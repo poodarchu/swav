@@ -178,7 +178,7 @@ def main():
         momentum=0.9,
         weight_decay=args.wd,
     )
-    optimizer = LARC(optimizer=optimizer, trust_coefficient=0.001, clip=False)
+    # optimizer = LARC(optimizer=optimizer, trust_coefficient=0.001, clip=False)
     warmup_lr_schedule = np.linspace(args.start_warmup, args.base_lr, len(train_loader) * args.warmup_epochs)
     iters = np.arange(len(train_loader) * (args.epochs - args.warmup_epochs))
     cosine_lr_schedule = np.array([args.final_lr + 0.5 * (args.base_lr - args.final_lr) * (1 + \
@@ -274,6 +274,7 @@ def train(train_loader, model, optimizer, epoch, lr_schedule, queue):
     for it, inputs in enumerate(train_loader):
         # measure data loading time
         data_time.update(time.time() - end)
+        dt = time.time() - end
 
         # update learning rate
         iteration = epoch * len(train_loader) + it
@@ -325,6 +326,9 @@ def train(train_loader, model, optimizer, epoch, lr_schedule, queue):
             loss += subloss / (np.sum(args.nmb_crops) - 1)
         loss /= len(args.crops_for_assign)
 
+        print("embedding: ", embedding.shape, embedding.requires_grad)
+        print("prototypes: ", output.shape, output.requires_grad)
+
         # ============ backward and optim step ... ============
         optimizer.zero_grad()
         if args.use_fp16:
@@ -342,20 +346,21 @@ def train(train_loader, model, optimizer, epoch, lr_schedule, queue):
         # ============ misc ... ============
         losses.update(loss.item(), inputs[0].size(0))
         batch_time.update(time.time() - end)
+        bt = time.time() - end
         end = time.time()
-        if args.rank ==0 and it % 50 == 0:
+        if args.rank ==0 and it % 20 == 0:
             logger.info(
                 "Epoch: [{0}][{1}]\t"
-                "Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t"
-                "Data {data_time.val:.3f} ({data_time.avg:.3f})\t"
-                "Loss {loss.val:.4f} ({loss.avg:.4f})\t"
+                "Time {2}\t"
+                "Data {3}\t"
+                "Loss {4}\t"
                 "Lr: {lr:.4f}".format(
                     epoch,
                     it,
-                    batch_time=batch_time,
-                    data_time=data_time,
-                    loss=losses,
-                    lr=optimizer.optim.param_groups[0]["lr"],
+                    batch_time.avg,
+                    data_time.avg,
+                    loss,
+                    lr=optimizer.param_groups[0]["lr"],
                 )
             )
     return (epoch, losses.avg), queue
